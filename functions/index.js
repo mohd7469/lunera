@@ -1,48 +1,83 @@
 
 'use strict';
 
-/* Initialize firebase admin */
 const admin = require('firebase-admin');
 
-/* Import the firebase-functions package for deployment */
 const functions = require('firebase-functions');
 
-/* Initialize firebase functions */
 admin.initializeApp(functions.config().firebase);
 
-/* Initialize firebase database */
 var db = admin.firestore();
 
-/* Import Dialogflow module from the Actions on Google client library */
-const {
-  SimpleResponse,
-  dialogflow,
-  } = require('actions-on-google');
+const { WebhookClient } = require('dialogflow-fulfillment');
 
-/* Instantiate Dialogflow client */
-const app = dialogflow();
+exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, response) => {
 
-app.intent('Default Welcome Intent', (conv) => {
+    const agent = new WebhookClient({ request, response });
 
-  conv.ask(new SimpleResponse({
-    speech: `Welcome to the Lunera`,
-    text: `Welcome to the Lunera`
-  }));
+    //console.log('Dialogflow Request headers: ' + JSON.stringify(request.headers));
 
-  let test = {};
-  db.collection('').get()
-    .then((snapshot) => {
-      snapshot.forEach((doc) => {
-        test[doc.id] = doc.data();
-      });
-      return null;
-    })
-    .catch((err) => {
-      console.log('Error getting documents ', err);
-    });
+    let intentMap = new Map();
 
-  conv.add('hello');
+    intentMap.set('lights I/O', lightsIO);
+
+    function lightsIO(agent) {
+        let type = agent.parameters.type;
+        let ids = agent.parameters.ids;
+
+        console.log('type: ', type, ' ids: ', ids);
+
+        if(ids.length < 3) {
+            db
+                .collection("lights")
+                .doc(ids.toString())
+                .set({
+                    state: type
+                })
+                .then(() => {
+                    console.log("Successfully written!");
+                })
+                .catch((error) => {
+                    console.lof("Error writing document: ", error);
+                });
+        } else {
+            db
+                .collection("lights")
+                .doc(ids[0])
+                .set({
+                    state: type
+                })
+                .doc(ids[1])
+                .set({
+                    state: type
+                })
+                .then(() => {
+                    console.log("Successfully written!");
+                })
+                .catch((error) => {
+                    console.lof("Error writing document: ", error);
+                });
+        }
+
+        agent.add(`Ok ${ids.toString()} are now ${type}`);
+
+    }
+
+    agent.handleRequest(intentMap);
 
 });
 
-exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
+/*
+ let test = {};
+ db.collection('').get()
+ .then((snapshot) => {
+ snapshot.forEach((doc) => {
+ test[doc.id] = doc.data();
+ });
+ return null;
+ })
+ .catch((err) => {
+ console.log('Error getting documents ', err);
+ });
+
+ */
