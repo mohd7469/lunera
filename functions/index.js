@@ -29,6 +29,18 @@ app.intent('Default Welcome Intent', (conv) => {
     text: `Welcome to the Lunera`
   }));
 
+  let test = {};
+  db.collection('').get()
+    .then((snapshot) => {
+      snapshot.forEach((doc) => {
+        test[doc.id] = doc.data();
+      });
+      return null;
+    })
+    .catch((err) => {
+      console.log('Error getting documents ', err);
+    });
+
   conv.add('hello');
 
 });
