@@ -1,0 +1,10 @@
+node_modules
+dist
+.idea
+/.idea
+.tmp
+.sass-cache
+bower_components
+/nbproject/private/
+.log
+/test
