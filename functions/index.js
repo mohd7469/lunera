@@ -13,71 +13,87 @@ const { WebhookClient } = require('dialogflow-fulfillment');
 
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, response) => {
 
-    const agent = new WebhookClient({ request, response });
+  const agent = new WebhookClient({ request, response });
 
-    //console.log('Dialogflow Request headers: ' + JSON.stringify(request.headers));
+  let intentMap = new Map();
 
-    let intentMap = new Map();
+  intentMap.set('lights I/O', lightsIO);
+  intentMap.set('status I/O', statusIO);
 
-    intentMap.set('lights I/O', lightsIO);
+  function lightsIO(agent) {
 
-    function lightsIO(agent) {
-        let type = agent.parameters.type;
-        let ids = agent.parameters.ids;
+    let type = agent.parameters.type;
+    let ids = agent.parameters.ids;
+    let collection = db.collection('lights');
 
-        console.log('type: ', type, ' ids: ', ids);
+    if(type === 'on' || type === 'off') {
 
-        if(ids.length < 3) {
-            db
-                .collection("lights")
-                .doc(ids.toString())
-                .set({
-                    state: type
-                })
-                .then(() => {
-                    console.log("Successfully written!");
-                })
-                .catch((error) => {
-                    console.lof("Error writing document: ", error);
-                });
-        } else {
-            db
-                .collection("lights")
-                .doc(ids[0])
-                .set({
-                    state: type
-                })
-                .doc(ids[1])
-                .set({
-                    state: type
-                })
-                .then(() => {
-                    console.log("Successfully written!");
-                })
-                .catch((error) => {
-                    console.lof("Error writing document: ", error);
-                });
+      // when ids contains all lights
+
+      for(let i = 0; i < ids.length; i++) {
+        if(ids[i].indexOf(",") > -1) {
+          ids = ids[i].split(',');
         }
+      }
 
-        agent.add(`Ok ${ids.toString()} are now ${type}`);
+      var batch = db.batch();
+
+      var lightRef;
+
+      ids.forEach((val) => {
+        lightRef = collection.doc(val);
+        batch.set(lightRef, { state: type });
+      });
+
+      return batch.commit().then(() => {
+        console.log('type: ', type, ' ids: ', ids);
+        agent.add(`Okay ${ids.toString()} now ${type}.`);
+        return null;
+      });
 
     }
+    else {
+      agent.add(`Sorry, i think you misspelled!`);
+    }
 
-    agent.handleRequest(intentMap);
+  }
+  function statusIO(agent) {
+
+    let ids = agent.parameters.ids;
+
+    // when ids contains all lights
+
+    for(let i = 0; i < ids.length; i++) {
+      if(ids[i].indexOf(",") > -1) {
+        ids = ids[i].split(',');
+      }
+    }
+
+    console.log('ids: ', ids);
+
+    let lights = {};
+
+    return db.collection('lights').get()
+      .then((snapshot) => {
+        snapshot.forEach((doc) => {
+          lights[doc.id] = doc.data();
+        });
+        return null;
+      })
+      .then(() => {
+        console.info(JSON.stringify(lights, null, 4));
+        var res = '';
+        ids.forEach((id) => {
+          res += `${id} is ${lights[id].state},  \n`;
+        });
+        return agent.add(res);
+      })
+      .catch((err) => {
+        console.log('Error getting iformation ', err);
+      });
+
+  }
+
+  agent.handleRequest(intentMap);
 
 });
-
-/*
- let test = {};
- db.collection('').get()
- .then((snapshot) => {
- snapshot.forEach((doc) => {
- test[doc.id] = doc.data();
- });
- return null;
- })
- .catch((err) => {
- console.log('Error getting documents ', err);
- });
-
- */
